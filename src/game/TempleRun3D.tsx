@@ -5,49 +5,120 @@ import DinovoxVoxel from "./DinovoxVoxel"
 import PalmierVoxel from "./PalmierVoxel"
 import ChestVoxel from "./ChestVoxel"
 
-// Couloir de sable, couleur plage
-function TempleCorridor({ offset }: { offset: number }) {
-  const length = 50
-  const z1 = ((offset % length) - length)
-  const z2 = (offset % length)
-  return (
-    <>
-      <mesh receiveShadow position={[0, 0, z1]}>
-        <boxGeometry args={[6, 0.2, length]} />
+// Génère des bords irréguliers pour la plage, de façon déterministe par segment
+function BeachEdge({ side, z, seed }: { side: "left" | "right"; z: number; seed: number }) {
+  const edgeSegments = 8
+  function pseudoRandom(i: number) {
+    return Math.abs(Math.sin(seed * 100 + i * 17.3)) % 1
+  }
+  const edge: JSX.Element[] = []
+  for (let i = 0; i < edgeSegments; i++) {
+    const segZ = z - 25 + (i * 50) / edgeSegments + 50 / edgeSegments / 2
+    const width = 0.3 + pseudoRandom(i) * 0.25
+    const height = 0.18 + pseudoRandom(i + 10) * 0.08
+    edge.push(
+      <mesh
+        key={i}
+        position={[
+          side === "left" ? -3.15 - width / 2 : 3.15 + width / 2,
+          0.11,
+          segZ,
+        ]}
+      >
+        <boxGeometry args={[width, height, 50 / edgeSegments * 0.95]} />
         <meshStandardMaterial color="#f4e2b6" />
       </mesh>
-      <mesh receiveShadow position={[0, 0, z2]}>
-        <boxGeometry args={[6, 0.2, length]} />
+    )
+  }
+  return <>{edge}</>
+}
+
+// Eau sur les côtés
+function Sea({ side, z }: { side: "left" | "right"; z: number }) {
+  return (
+    <mesh
+      position={[
+        side === "left" ? -5.5 : 5.5,
+        0.05,
+        z,
+      ]}
+    >
+      <boxGeometry args={[4, 0.1, 50]} />
+      <meshStandardMaterial color="#7dd3fc" transparent opacity={0.85} />
+    </mesh>
+  )
+}
+
+// Sable central avec léger dégradé
+function Sand({ z }: { z: number }) {
+  return (
+    <>
+      <mesh receiveShadow position={[0, 0, z]}>
+        <boxGeometry args={[6, 0.2, 50]} />
         <meshStandardMaterial color="#f4e2b6" />
+      </mesh>
+      <mesh receiveShadow position={[0, 0.01, z]}>
+        <boxGeometry args={[4.5, 0.05, 50]} />
+        <meshStandardMaterial color="#fffbe6" opacity={0.7} transparent />
       </mesh>
     </>
   )
 }
 
-// Palmiers décoratifs sur les côtés, générés de façon fluide et continue
-function SidePalms({ offset }: { offset: number }) {
+// Route plage répétée à l'infini
+function TempleCorridor({ offset }: { offset: number }) {
   const length = 50
+  const base = Math.floor(offset / length) * length
+  const segments = [base - length, base, base + length]
+  return (
+    <>
+      {segments.map((z, idx) => (
+        <React.Fragment key={z}>
+          <Sea side="left" z={z - offset} />
+          <Sea side="right" z={z - offset} />
+          <Sand z={z - offset} />
+          <BeachEdge side="left" z={z - offset} seed={z * 13 + 1} />
+          <BeachEdge side="right" z={z - offset} seed={z * 13 + 2} />
+        </React.Fragment>
+      ))}
+    </>
+  )
+}
+
+// Palmiers décoratifs sur les côtés, défilent dans le même sens que la route
+function SidePalms({ offset }: { offset: number }) {
   const spacing = 7
-  const visibleStart = -10
-  const visibleEnd = 30
+  const visibleStart = -30
+  const visibleEnd = 40
   const palms = []
 
-  // On veut couvrir toute la zone visible devant le joueur
-  // On calcule la position réelle du couloir, puis on place des palmiers à intervalles réguliers
-  // sur toute la plage visible (pas de modulo qui recale tout d'un coup)
-  const corridorZ = offset - 50
-  // On commence un peu avant le joueur pour couvrir l'arrière
   for (
-    let z = Math.floor((corridorZ + visibleStart) / spacing) * spacing;
-    z < corridorZ + visibleEnd;
+    let z = Math.floor(visibleStart / spacing) * spacing;
+    z < visibleEnd;
     z += spacing
   ) {
     palms.push(
-      <PalmierVoxel key={`L${z}`} x={-2.7} z={z} />,
-      <PalmierVoxel key={`R${z}`} x={2.7} z={z + spacing / 2} />
+      <PalmierVoxel key={`L${z}`} x={-2.7} z={z - offset} />,
+      <PalmierVoxel key={`R${z}`} x={2.7} z={z + spacing / 2 - offset} />
     )
   }
   return <>{palms}</>
+}
+
+// Types d'obstacles
+type Obstacle = {
+  x: number
+  z: number
+  type: "palmier" | "chest"
+}
+
+// Affichage d'un obstacle sur la route
+function ObstacleOnRoad({ obstacle, offset }: { obstacle: Obstacle, offset: number }) {
+  if (obstacle.type === "palmier") {
+    return <PalmierVoxel x={obstacle.x} z={obstacle.z - offset} />
+  }
+  // chest
+  return <ChestVoxel x={obstacle.x} y={0.25} z={obstacle.z - offset} />
 }
 
 function Game3DLogic({
@@ -63,8 +134,6 @@ function Game3DLogic({
   setScore,
   corridorOffset,
   setCorridorOffset,
-  chest,
-  setChest,
 }: {
   onGameOver: (score: number) => void
   onScore: (score: number) => void
@@ -72,64 +141,60 @@ function Game3DLogic({
   setGameOver: React.Dispatch<React.SetStateAction<boolean>>
   runnerX: number
   setRunnerX: React.Dispatch<React.SetStateAction<number>>
-  obstacles: { x: number; z: number }[]
-  setObstacles: React.Dispatch<React.SetStateAction<{ x: number; z: number }[]>>
+  obstacles: Obstacle[]
+  setObstacles: React.Dispatch<React.SetStateAction<Obstacle[]>>
   score: number
   setScore: React.Dispatch<React.SetStateAction<number>>
   corridorOffset: number
   setCorridorOffset: React.Dispatch<React.SetStateAction<number>>
-  chest: { x: number; z: number }
-  setChest: React.Dispatch<React.SetStateAction<{ x: number; z: number }>>
 }) {
   const speed = 0.18
+  const offsetRef = useRef(corridorOffset)
+  offsetRef.current = corridorOffset
 
   useFrame(() => {
     if (gameOver) return
-    // Obstacles (palmiers)
+
+    // Avance la route (offset--)
+    setCorridorOffset((offset) => offset - speed)
+
+    // Suppression des obstacles passés derrière le joueur
     setObstacles((obs) =>
-      obs
-        .map((o) => ({ ...o, z: o.z + speed }))
-        .filter((o) => o.z < 2)
+      obs.filter((o) => (o.z - (offsetRef.current - speed)) > -2)
     )
-    setCorridorOffset((offset) => offset + speed)
 
-    // Chest avance aussi
-    setChest((prev) => ({ ...prev, z: prev.z + speed }))
-
-    // Génération obstacles
+    // Ajout d'obstacles devant (z = offset courant + 40)
     if (obstacles.length < 5 && Math.random() < 0.03) {
       const lane = [-1, 0, 1][Math.floor(Math.random() * 3)]
-      setObstacles((obs) => [...obs, { x: lane, z: -40 }])
+      const type: "palmier" | "chest" = Math.random() < 0.8 ? "palmier" : "chest"
+      setObstacles((obs) => [...obs, { x: lane, z: offsetRef.current + 40, type }])
     }
+
     // Collision obstacles
     obstacles.forEach((o) => {
+      const zAffiche = o.z - (offsetRef.current - speed)
       if (
-        Math.abs(o.z) < 0.7 &&
+        Math.abs(zAffiche) < 0.7 &&
         Math.abs(o.x - runnerX) < 0.7
       ) {
-        setGameOver(true)
-        onGameOver(score)
+        if (o.type === "palmier") {
+          setGameOver(true)
+          onGameOver(score)
+        } else if (o.type === "chest") {
+          setScore((s) => {
+            const newScore = s + 10
+            onScore(newScore)
+            return newScore
+          })
+          // Supprime le coffre ramassé
+          setObstacles((obs) => obs.filter((p) => p !== o))
+        }
       }
     })
-    // Collision chest
-    if (
-      Math.abs(chest.z) < 0.7 &&
-      Math.abs(chest.x - runnerX) < 0.7
-    ) {
-      setScore((s) => {
-        const newScore = s + 10
-        onScore(newScore)
-        return newScore
-      })
-      const newLane = [-1, 0, 1][Math.floor(Math.random() * 3)]
-      setChest({ x: newLane, z: -40 - Math.random() * 20 })
-    }
-    // (Plus d'incrémentation automatique du score ici)
   })
 
   return (
     <>
-      {/* Lumière chaude pour ambiance plage */}
       <ambientLight intensity={0.7} color="#fffbe6" />
       <directionalLight
         position={[2, 8, 5]}
@@ -139,38 +204,30 @@ function Game3DLogic({
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      <TempleCorridor offset={corridorOffset - 50} />
-      <SidePalms offset={corridorOffset - 50} />
+      <TempleCorridor offset={corridorOffset} />
+      <SidePalms offset={corridorOffset} />
       <DinovoxVoxel x={runnerX} />
       {obstacles.map((o, i) => (
-        <PalmierVoxel key={i} x={o.x} z={o.z} />
+        <ObstacleOnRoad key={i} obstacle={o} offset={corridorOffset} />
       ))}
-      {/* Chest collectible */}
-      <ChestVoxel x={chest.x} y={0.25} z={chest.z} />
     </>
   )
 }
 
 function Game3D() {
   const [runnerX, setRunnerX] = useState(0)
-  const [obstacles, setObstacles] = useState([
-    { x: -1, z: -10 },
-    { x: 1, z: -20 },
-    { x: 0, z: -30 },
+  const [obstacles, setObstacles] = useState<Obstacle[]>([
+    { x: -1, z: 10, type: "palmier" },
+    { x: 1, z: 20, type: "palmier" },
+    { x: 0, z: 30, type: "chest" },
   ])
   const [score, setScore] = useState(0)
   const [gameOver, setGameOver] = useState(false)
   const [highScore, setHighScore] = useState(
     Number(localStorage.getItem("dinovox_highscore") || 0)
   )
-  const [corridorOffset, setCorridorOffset] = useState(-50)
-  // Chest sur la route, lane aléatoire, loin devant au départ
-  const [chest, setChest] = useState<{ x: number; z: number }>(
-    () => {
-      const lane = [-1, 0, 1][Math.floor(Math.random() * 3)]
-      return { x: lane, z: -25 }
-    }
-  )
+  // offset initial à 0 pour que la route soit centrée sous le dino
+  const [corridorOffset, setCorridorOffset] = useState(0)
 
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -185,15 +242,13 @@ function Game3D() {
   const handleRestart = useCallback(() => {
     setRunnerX(0)
     setObstacles([
-      { x: -1, z: -10 },
-      { x: 1, z: -20 },
-      { x: 0, z: -30 },
+      { x: -1, z: 10, type: "palmier" },
+      { x: 1, z: 20, type: "palmier" },
+      { x: 0, z: 30, type: "chest" },
     ])
     setScore(0)
     setGameOver(false)
-    setCorridorOffset(-50)
-    const lane = [-1, 0, 1][Math.floor(Math.random() * 3)]
-    setChest({ x: lane, z: -25 })
+    setCorridorOffset(0)
   }, [])
 
   const handleGameOver = useCallback(
@@ -231,8 +286,6 @@ function Game3D() {
           setScore={setScore}
           corridorOffset={corridorOffset}
           setCorridorOffset={setCorridorOffset}
-          chest={chest}
-          setChest={setChest}
         />
       </Canvas>
       <div className="absolute top-0 left-0 w-full flex flex-col items-center mt-8 pointer-events-none z-10">
