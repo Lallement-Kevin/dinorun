@@ -68,11 +68,16 @@ function Sand({ z }: { z: number }) {
 // Route plage répétée à l'infini
 function TempleCorridor({ offset }: { offset: number }) {
   const length = 50
-  const base = Math.floor(offset / length) * length
-  const segments = [base - length, base, base + length]
+  // On génère les segments de offset-200 à offset+400 pour couvrir une très large plage
+  const start = Math.floor((offset - 200) / length) * length
+  const end = Math.ceil((offset + 400) / length) * length
+  const segments = []
+  for (let z = start; z <= end; z += length) {
+    segments.push(z)
+  }
   return (
     <>
-      {segments.map((z, idx) => (
+      {segments.map((z) => (
         <React.Fragment key={z}>
           <Sea side="left" z={z + offset} />
           <Sea side="right" z={z + offset} />
@@ -88,8 +93,8 @@ function TempleCorridor({ offset }: { offset: number }) {
 // Palmiers décoratifs sur les côtés, défilent dans le même sens que la route
 function SidePalms({ offset }: { offset: number }) {
   const spacing = 7
-  const visibleStart = -30
-  const visibleEnd = 40
+  const visibleStart = -200
+  const visibleEnd = 400
   const palms = []
 
   for (
@@ -185,23 +190,28 @@ function Game3DLogic({
     })
 
     // Collision obstacles (z proche de 0)
-    obstacles.forEach((o) => {
-      if (
-        Math.abs(o.z) < 0.7 &&
-        Math.abs(o.x - runnerX) < 0.7
-      ) {
-        if (o.type === "palmier") {
-          setGameOver(true)
-          onGameOver(score)
-        } else if (o.type === "chest") {
-          setScore((s) => {
-            const newScore = s + 10
-            onScore(newScore)
-            return newScore
-          })
-          setObstacles((obs) => obs.filter((p) => p !== o))
+    setObstacles((obs) => {
+      let updated = obs
+      obs.forEach((o) => {
+        if (
+          Math.abs(o.z) < 0.7 &&
+          Math.abs(o.x - runnerX) < 0.7
+        ) {
+          if (o.type === "palmier") {
+            setGameOver(true)
+            onGameOver(score)
+          } else if (o.type === "chest") {
+            setScore((s) => {
+              const newScore = s + 10
+              onScore(newScore)
+              return newScore
+            })
+            // Supprime le coffre ramassé immédiatement
+            updated = updated.filter((p) => p !== o)
+          }
         }
-      }
+      })
+      return updated
     })
   })
 
