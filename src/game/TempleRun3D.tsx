@@ -65,7 +65,7 @@ function Sand({ z }: { z: number }) {
   )
 }
 
-// Route plage répétée à l'infini
+// Route plage répétée à l'infini, segments parfaitement enchaînés
 function TempleCorridor({ offset }: { offset: number }) {
   const length = 50
   // On génère les segments de offset-200 à offset+400 pour couvrir une très large plage
@@ -75,26 +75,30 @@ function TempleCorridor({ offset }: { offset: number }) {
   for (let z = start; z <= end; z += length) {
     segments.push(z)
   }
+  // Décalage pour continuité parfaite
+  const mod = offset % length
   return (
     <>
       {segments.map((z) => (
         <React.Fragment key={z}>
-          <Sea side="left" z={z + offset} />
-          <Sea side="right" z={z + offset} />
-          <Sand z={z + offset} />
-          <BeachEdge side="left" z={z + offset} seed={z * 13 + 1} />
-          <BeachEdge side="right" z={z + offset} seed={z * 13 + 2} />
+          <Sea side="left" z={z - mod} />
+          <Sea side="right" z={z - mod} />
+          <Sand z={z - mod} />
+          <BeachEdge side="left" z={z - mod} seed={z * 13 + 1} />
+          <BeachEdge side="right" z={z - mod} seed={z * 13 + 2} />
         </React.Fragment>
       ))}
     </>
   )
 }
 
-// Palmiers décoratifs sur les côtés, défilent dans le même sens que la route
+// Palmiers décoratifs sur les côtés, synchronisés avec la route
 function SidePalms({ offset }: { offset: number }) {
   const spacing = 7
   const visibleStart = -200
   const visibleEnd = 400
+  const length = 50
+  const mod = offset % length
   const palms = []
 
   for (
@@ -103,8 +107,8 @@ function SidePalms({ offset }: { offset: number }) {
     z += spacing
   ) {
     palms.push(
-      <PalmierVoxel key={`L${z}`} x={-2.7} z={z + offset} />,
-      <PalmierVoxel key={`R${z}`} x={2.7} z={z + spacing / 2 + offset} />
+      <PalmierVoxel key={`L${z}`} x={-2.7} z={z - mod} />,
+      <PalmierVoxel key={`R${z}`} x={2.7} z={z + spacing / 2 - mod} />
     )
   }
   return <>{palms}</>
@@ -162,7 +166,7 @@ function Game3DLogic({
     if (gameOver) return
 
     // Décor : offset augmente (le monde recule, le joueur avance)
-    setCorridorOffset((offset) => offset + speed)
+    setCorridorOffset((offset) => offset - speed)
 
     // Obstacles : leur z augmente (ils viennent vers le joueur)
     setObstacles((obs) =>
