@@ -1,9 +1,9 @@
 import React, { useRef, useState, useCallback } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
-import { Landmark } from "lucide-react"
 import DinovoxVoxel from "./DinovoxVoxel"
 import PalmierVoxel from "./PalmierVoxel"
 import ChestVoxel from "./ChestVoxel"
+import GameUI from "./GameUI"
 
 // Génère des bords irréguliers pour la plage, de façon déterministe par segment
 function BeachEdge({ side, z, seed }: { side: "left" | "right"; z: number; seed: number }) {
@@ -130,53 +130,63 @@ function ObstacleOnRoad({ obstacle }: { obstacle: Obstacle }) {
   return <ChestVoxel x={obstacle.x} y={0.25} z={obstacle.z} />
 }
 
+// --- 3D Logic Component (inside Canvas) ---
 function Game3DLogic({
+  running,
   onGameOver,
   onScore,
-  gameOver,
-  setGameOver,
-  runnerX,
-  setRunnerX,
-  obstacles,
-  setObstacles,
-  score,
-  setScore,
-  corridorOffset,
-  setCorridorOffset,
+  resetSignal,
 }: {
+  running: boolean
   onGameOver: (score: number) => void
   onScore: (score: number) => void
-  gameOver: boolean
-  setGameOver: React.Dispatch<React.SetStateAction<boolean>>
-  runnerX: number
-  setRunnerX: React.Dispatch<React.SetStateAction<number>>
-  obstacles: Obstacle[]
-  setObstacles: React.Dispatch<React.SetStateAction<Obstacle[]>>
-  score: number
-  setScore: React.Dispatch<React.SetStateAction<number>>
-  corridorOffset: number
-  setCorridorOffset: React.Dispatch<React.SetStateAction<number>>
+  resetSignal: number
 }) {
-  const speed = 0.18
-  const SPAWN_DISTANCE = 40
-  const MIN_OBSTACLE_SPACING = 7
-  const REMOVE_DISTANCE = 10
+  // Tous les états du jeu sont internes ici, mais reset quand resetSignal change
+  const [runnerX, setRunnerX] = useState(0)
+  const [obstacles, setObstacles] = useState<Obstacle[]>([])
+  const [score, setScore] = useState(0)
+  const [corridorOffset, setCorridorOffset] = useState(0)
+  const [gameOver, setGameOver] = useState(false)
 
+  // Reset complet quand resetSignal change
+  React.useEffect(() => {
+    setRunnerX(0)
+    setObstacles([])
+    setScore(0)
+    setCorridorOffset(0)
+    setGameOver(false)
+  }, [resetSignal])
+
+  // Contrôles clavier
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!running || gameOver) return
+      if (e.code === "ArrowLeft" && runnerX > -1.5) setRunnerX((x) => x - 1)
+      if (e.code === "ArrowRight" && runnerX < 1.5) setRunnerX((x) => x + 1)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [runnerX, running, gameOver])
+
+  // Logique du jeu
   useFrame(() => {
-    if (gameOver) return
+    if (!running || gameOver) return
 
     // Décor : offset augmente (le monde recule, le joueur avance)
-    setCorridorOffset((offset) => offset - speed)
+    setCorridorOffset((offset) => offset - 0.18)
 
     // Obstacles : leur z augmente (ils viennent vers le joueur)
     setObstacles((obs) =>
       obs
-        .map((o) => ({ ...o, z: o.z + speed }))
-        .filter((o) => o.z < REMOVE_DISTANCE)
+        .map((o) => ({ ...o, z: o.z + 0.18 }))
+        .filter((o) => o.z < 10)
     )
 
     // Apparition régulière : on ajoute un obstacle si le dernier est assez loin du joueur
     setObstacles((obs) => {
+      const SPAWN_DISTANCE = 40
+      const MIN_OBSTACLE_SPACING = 7
       if (
         obs.length === 0 ||
         obs[obs.length - 1].z > -SPAWN_DISTANCE + MIN_OBSTACLE_SPACING
@@ -217,6 +227,7 @@ function Game3DLogic({
       })
       return updated
     })
+    // Pas d'incrémentation automatique du score
   })
 
   return (
@@ -240,47 +251,40 @@ function Game3DLogic({
   )
 }
 
-function Game3D() {
-  const [runnerX, setRunnerX] = useState(0)
-  const [obstacles, setObstacles] = useState<Obstacle[]>([])
-  const [score, setScore] = useState(0)
+// --- Main Game3D Component ---
+export default function TempleRun3D() {
+  // Etats globaux
+  const [running, setRunning] = useState(false)
   const [gameOver, setGameOver] = useState(false)
+  const [score, setScore] = useState(0)
   const [highScore, setHighScore] = useState(
     Number(localStorage.getItem("dinovox_highscore") || 0)
   )
-  const [corridorOffset, setCorridorOffset] = useState(0)
+  // Pour forcer le reset du composant 3D
+  const [resetSignal, setResetSignal] = useState(0)
 
-  React.useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (gameOver) return
-      if (e.code === "ArrowLeft" && runnerX > -1.5) setRunnerX((x) => x - 1)
-      if (e.code === "ArrowRight" && runnerX < 1.5) setRunnerX((x) => x + 1)
+  // Callback appelé par le composant 3D quand game over
+  const handleGameOver = useCallback((finalScore: number) => {
+    setRunning(false)
+    setGameOver(true)
+    setScore(finalScore)
+    if (finalScore > highScore) {
+      setHighScore(finalScore)
+      localStorage.setItem("dinovox_highscore", String(finalScore))
     }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [runnerX, gameOver])
+  }, [highScore])
 
-  const handleRestart = useCallback(() => {
-    setRunnerX(0)
-    setObstacles([])
-    setScore(0)
-    setGameOver(false)
-    setCorridorOffset(0)
-  }, [])
-
-  const handleGameOver = useCallback(
-    (finalScore: number) => {
-      setGameOver(true)
-      if (finalScore > highScore) {
-        setHighScore(finalScore)
-        localStorage.setItem("dinovox_highscore", String(finalScore))
-      }
-    },
-    [highScore]
-  )
-
+  // Callback appelé par le composant 3D quand score change (coffre ramassé)
   const handleScore = useCallback((s: number) => {
     setScore(s)
+  }, [])
+
+  // Démarrer ou rejouer
+  const handleStart = useCallback(() => {
+    setRunning(true)
+    setGameOver(false)
+    setScore(0)
+    setResetSignal((n) => n + 1) // force le reset du composant 3D
   }, [])
 
   return (
@@ -291,51 +295,20 @@ function Game3D() {
         style={{ width: "100vw", height: "100vh", background: "#fef6e4" }}
       >
         <Game3DLogic
+          running={running}
           onGameOver={handleGameOver}
           onScore={handleScore}
-          gameOver={gameOver}
-          setGameOver={setGameOver}
-          runnerX={runnerX}
-          setRunnerX={setRunnerX}
-          obstacles={obstacles}
-          setObstacles={setObstacles}
-          score={score}
-          setScore={setScore}
-          corridorOffset={corridorOffset}
-          setCorridorOffset={setCorridorOffset}
+          resetSignal={resetSignal}
         />
       </Canvas>
-      <div className="absolute top-0 left-0 w-full flex flex-col items-center mt-8 pointer-events-none z-10">
-        <div className="flex items-center gap-3 mb-4">
-          <Landmark className="w-10 h-10 text-yellow-400 drop-shadow-lg" />
-          <span className="text-3xl font-extrabold text-white drop-shadow-lg tracking-wide">
-            Dinovox Run 3D
-          </span>
-        </div>
-        <div className="bg-black/60 rounded-xl px-6 py-2 text-white text-lg font-bold shadow-lg">
-          Score: {score}
-        </div>
-        <div className="bg-black/60 rounded-xl px-6 py-2 text-white text-lg font-bold shadow-lg mt-2">
-          High Score: {highScore}
-        </div>
-      </div>
-      {gameOver && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20">
-          <div className="flex items-center gap-3 mb-6">
-            <Landmark className="w-12 h-12 text-yellow-400 drop-shadow-lg" />
-            <span className="text-4xl font-extrabold text-white drop-shadow-lg tracking-wide">
-              Game Over
-            </span>
-          </div>
-          <div className="text-white text-2xl mb-4">Score: {score}</div>
-          <button
-            className="bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold px-8 py-3 rounded-full shadow-lg text-2xl transition pointer-events-auto"
-            onClick={handleRestart}
-          >
-            Restart
-          </button>
-        </div>
-      )}
+      {/* UI Overlay */}
+      <GameUI
+        running={running && !gameOver}
+        score={score}
+        highScore={highScore}
+        onStart={handleStart}
+        gameOver={gameOver}
+      />
       <div className="absolute bottom-0 left-0 w-full flex justify-center mb-6 z-10">
         <div className="bg-black/50 rounded-lg px-4 py-2 text-white text-base flex gap-4 items-center">
           <kbd className="bg-gray-800 px-2 py-1 rounded">←</kbd>
@@ -345,8 +318,4 @@ function Game3D() {
       </div>
     </div>
   )
-}
-
-export default function TempleRun3D() {
-  return <Game3D />
 }
