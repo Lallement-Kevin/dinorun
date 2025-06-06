@@ -74,11 +74,11 @@ function TempleCorridor({ offset }: { offset: number }) {
     <>
       {segments.map((z, idx) => (
         <React.Fragment key={z}>
-          <Sea side="left" z={z - offset} />
-          <Sea side="right" z={z - offset} />
-          <Sand z={z - offset} />
-          <BeachEdge side="left" z={z - offset} seed={z * 13 + 1} />
-          <BeachEdge side="right" z={z - offset} seed={z * 13 + 2} />
+          <Sea side="left" z={z + offset} />
+          <Sea side="right" z={z + offset} />
+          <Sand z={z + offset} />
+          <BeachEdge side="left" z={z + offset} seed={z * 13 + 1} />
+          <BeachEdge side="right" z={z + offset} seed={z * 13 + 2} />
         </React.Fragment>
       ))}
     </>
@@ -98,8 +98,8 @@ function SidePalms({ offset }: { offset: number }) {
     z += spacing
   ) {
     palms.push(
-      <PalmierVoxel key={`L${z}`} x={-2.7} z={z - offset} />,
-      <PalmierVoxel key={`R${z}`} x={2.7} z={z + spacing / 2 - offset} />
+      <PalmierVoxel key={`L${z}`} x={-2.7} z={z + offset} />,
+      <PalmierVoxel key={`R${z}`} x={2.7} z={z + spacing / 2 + offset} />
     )
   }
   return <>{palms}</>
@@ -113,12 +113,12 @@ type Obstacle = {
 }
 
 // Affichage d'un obstacle sur la route
-function ObstacleOnRoad({ obstacle, offset }: { obstacle: Obstacle, offset: number }) {
+function ObstacleOnRoad({ obstacle }: { obstacle: Obstacle }) {
   if (obstacle.type === "palmier") {
-    return <PalmierVoxel x={obstacle.x} z={obstacle.z - offset} />
+    return <PalmierVoxel x={obstacle.x} z={obstacle.z} />
   }
   // chest
-  return <ChestVoxel x={obstacle.x} y={0.25} z={obstacle.z - offset} />
+  return <ChestVoxel x={obstacle.x} y={0.25} z={obstacle.z} />
 }
 
 function Game3DLogic({
@@ -149,32 +149,45 @@ function Game3DLogic({
   setCorridorOffset: React.Dispatch<React.SetStateAction<number>>
 }) {
   const speed = 0.18
-  const offsetRef = useRef(corridorOffset)
-  offsetRef.current = corridorOffset
+  const SPAWN_DISTANCE = 40
+  const MIN_OBSTACLE_SPACING = 7
+  const REMOVE_DISTANCE = 10
 
   useFrame(() => {
     if (gameOver) return
 
-    // Avance la route (offset--)
-    setCorridorOffset((offset) => offset - speed)
+    // Décor : offset augmente (le monde recule, le joueur avance)
+    setCorridorOffset((offset) => offset + speed)
 
-    // Suppression des obstacles passés derrière le joueur
+    // Obstacles : leur z augmente (ils viennent vers le joueur)
     setObstacles((obs) =>
-      obs.filter((o) => (o.z - (offsetRef.current - speed)) > -2)
+      obs
+        .map((o) => ({ ...o, z: o.z + speed }))
+        .filter((o) => o.z < REMOVE_DISTANCE)
     )
 
-    // Ajout d'obstacles devant (z = offset courant + 40)
-    if (obstacles.length < 5 && Math.random() < 0.03) {
-      const lane = [-1, 0, 1][Math.floor(Math.random() * 3)]
-      const type: "palmier" | "chest" = Math.random() < 0.8 ? "palmier" : "chest"
-      setObstacles((obs) => [...obs, { x: lane, z: offsetRef.current + 40, type }])
-    }
-
-    // Collision obstacles
-    obstacles.forEach((o) => {
-      const zAffiche = o.z - (offsetRef.current - speed)
+    // Apparition régulière : on ajoute un obstacle si le dernier est assez loin du joueur
+    setObstacles((obs) => {
       if (
-        Math.abs(zAffiche) < 0.7 &&
+        obs.length === 0 ||
+        obs[obs.length - 1].z > -SPAWN_DISTANCE + MIN_OBSTACLE_SPACING
+      ) {
+        if (obs.length < 5) {
+          const lane = [-1, 0, 1][Math.floor(Math.random() * 3)]
+          const type: "palmier" | "chest" = Math.random() < 0.8 ? "palmier" : "chest"
+          return [
+            ...obs,
+            { x: lane, z: -SPAWN_DISTANCE, type }
+          ]
+        }
+      }
+      return obs
+    })
+
+    // Collision obstacles (z proche de 0)
+    obstacles.forEach((o) => {
+      if (
+        Math.abs(o.z) < 0.7 &&
         Math.abs(o.x - runnerX) < 0.7
       ) {
         if (o.type === "palmier") {
@@ -186,7 +199,6 @@ function Game3DLogic({
             onScore(newScore)
             return newScore
           })
-          // Supprime le coffre ramassé
           setObstacles((obs) => obs.filter((p) => p !== o))
         }
       }
@@ -208,7 +220,7 @@ function Game3DLogic({
       <SidePalms offset={corridorOffset} />
       <DinovoxVoxel x={runnerX} />
       {obstacles.map((o, i) => (
-        <ObstacleOnRoad key={i} obstacle={o} offset={corridorOffset} />
+        <ObstacleOnRoad key={i + "-" + o.z.toFixed(2)} obstacle={o} />
       ))}
     </>
   )
@@ -216,17 +228,12 @@ function Game3DLogic({
 
 function Game3D() {
   const [runnerX, setRunnerX] = useState(0)
-  const [obstacles, setObstacles] = useState<Obstacle[]>([
-    { x: -1, z: 10, type: "palmier" },
-    { x: 1, z: 20, type: "palmier" },
-    { x: 0, z: 30, type: "chest" },
-  ])
+  const [obstacles, setObstacles] = useState<Obstacle[]>([])
   const [score, setScore] = useState(0)
   const [gameOver, setGameOver] = useState(false)
   const [highScore, setHighScore] = useState(
     Number(localStorage.getItem("dinovox_highscore") || 0)
   )
-  // offset initial à 0 pour que la route soit centrée sous le dino
   const [corridorOffset, setCorridorOffset] = useState(0)
 
   React.useEffect(() => {
@@ -241,11 +248,7 @@ function Game3D() {
 
   const handleRestart = useCallback(() => {
     setRunnerX(0)
-    setObstacles([
-      { x: -1, z: 10, type: "palmier" },
-      { x: 1, z: 20, type: "palmier" },
-      { x: 0, z: 30, type: "chest" },
-    ])
+    setObstacles([])
     setScore(0)
     setGameOver(false)
     setCorridorOffset(0)
