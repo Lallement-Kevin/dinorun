@@ -2,7 +2,14 @@ import React, { useState, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import ChestVoxel from "./ChestVoxel";
 import GameUI from "./GameUI";
-import { VoxelAsset } from "./VoxelAsset";
+import {
+  VoxelRocketDino,
+  VoxelBird,
+  VoxelPalm,
+  VoxelCrab,
+  VoxelChest,
+  VoxelFrog,
+} from "./VoxelAsset";
 import { BeachEdge } from "./BeachEdge";
 import { Sand } from "./Sand";
 import { max, min } from "three/tsl";
@@ -69,14 +76,12 @@ function SidePalms({ offset }: { offset: number }) {
 
     palms.push(
       <React.Fragment key={z}>
-        <VoxelAsset
-          path="/glb/Palm.glb"
+        <VoxelPalm
           position={[-2.7, 0, z - mod]}
           scale={0.5}
           rotation={[0, rotationLeft, 0]}
         />
-        <VoxelAsset
-          path="/glb/Palm.glb"
+        <VoxelPalm
           position={[2.7, 0, z - mod]}
           scale={0.5}
           rotation={[0, rotationRight, 0]}
@@ -100,8 +105,7 @@ function ObstacleOnRoad({ obstacle }: { obstacle: Obstacle }) {
   if (obstacle.type === "palmier") {
     const rotationY = pseudoRandom(parseInt(obstacle.id, 10)) * Math.PI * 2;
     return (
-      <VoxelAsset
-        path="/glb/Palm.glb"
+      <VoxelPalm
         position={[obstacle.x, 0, obstacle.z]}
         scale={0.5}
         rotation={[0, rotationY, 0]}
@@ -110,8 +114,7 @@ function ObstacleOnRoad({ obstacle }: { obstacle: Obstacle }) {
   }
   if (obstacle.type === "bird") {
     return (
-      <VoxelAsset
-        path="/glb/Bird.glb"
+      <VoxelBird
         position={[obstacle.x, 0, obstacle.z]}
         scale={3}
         rotation={[0, 0, 0]}
@@ -120,8 +123,7 @@ function ObstacleOnRoad({ obstacle }: { obstacle: Obstacle }) {
   }
   if (obstacle.type === "frog") {
     return (
-      <VoxelAsset
-        path="/glb/Frog.glb"
+      <VoxelFrog
         position={[obstacle.x, 0, obstacle.z]}
         scale={3}
         rotation={[0, 0, 0]}
@@ -130,8 +132,7 @@ function ObstacleOnRoad({ obstacle }: { obstacle: Obstacle }) {
   }
   if (obstacle.type === "crab") {
     return (
-      <VoxelAsset
-        path="/glb/Crab.glb"
+      <VoxelCrab
         position={[obstacle.x, 0, obstacle.z]}
         scale={3}
         rotation={[0, 0, 0]}
@@ -140,8 +141,7 @@ function ObstacleOnRoad({ obstacle }: { obstacle: Obstacle }) {
   }
 
   return (
-    <VoxelAsset
-      path="/glb/Chest.glb"
+    <VoxelChest
       position={[obstacle.x, 0.2, obstacle.z]}
       scale={0.8}
       rotation={[0, 0, 0]}
@@ -357,8 +357,7 @@ function Game3DLogic({
 
       <SidePalms offset={corridorOffset} />
 
-      <VoxelAsset
-        path="/glb/RocketDino.glb"
+      <VoxelRocketDino
         position={[runnerX, 0, runnerZ]}
         scale={0.5}
         rotation={[0, 0, 0]}
