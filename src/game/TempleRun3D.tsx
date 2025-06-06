@@ -192,7 +192,7 @@ function Game3DLogic({
         obs[obs.length - 1].z > -SPAWN_DISTANCE + MIN_OBSTACLE_SPACING
       ) {
         if (obs.length < 5) {
-          const lane = [-1, 0, 1][Math.floor(Math.random() * 3)]
+          const lane = [-2, -1, 0, 1, 2][Math.floor(Math.random() * 3)]
           const type: "palmier" | "chest" = Math.random() < 0.8 ? "palmier" : "chest"
           return [
             ...obs,
