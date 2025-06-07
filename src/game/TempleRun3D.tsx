@@ -14,7 +14,7 @@ import { BeachEdge } from "./BeachEdge";
 import { Sand } from "./Sand";
 import { max, min } from "three/tsl";
 
-const MAX_OFFSET = 2000;
+const MAX_OFFSET = 1000;
 const SPAWN_DISTANCE = 50;
 
 // Eau sur les côtés
@@ -278,8 +278,6 @@ function Game3DLogic({
         (obs.length === 0 ||
           obs[obs.length - 1].z > -SPAWN_DISTANCE + minObstacleSpacing)
       ) {
-        console.log("max_obstacles", maxObsatcles);
-        console.log("min_obstacle_spacing", minObstacleSpacing);
         if (obs.length < maxObsatcles) {
           const lane = [-2, -1, 0, 1, 2][Math.floor(Math.random() * 5)];
           const type: "palmier" | "chest" | "bird" | "frog" | "crab" = (() => {
@@ -337,8 +335,15 @@ function Game3DLogic({
     // Pas d'incrémentation automatique du score
 
     if (corridorOffset < -MAX_OFFSET) {
+      setMaxObstacles((prev) => Math.min(prev + 1, 100)); // Augmente le max obstacles
+      setMinObstacleSpacing((prev) => Math.max(prev - 0.2, 3));
       setCorridorOffset((prev) => prev + MAX_OFFSET); // on ramène à 0
       setObstacles([]);
+      setScore((s) => {
+        const newScore = s + 100;
+        onScore(newScore);
+        return newScore;
+      });
     }
   });
 
