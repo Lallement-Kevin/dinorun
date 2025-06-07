@@ -14,7 +14,7 @@ import { BeachEdge } from "./BeachEdge";
 import { Sand } from "./Sand";
 import { max, min } from "three/tsl";
 
-const MAX_OFFSET = 1000;
+const MAX_OFFSET = 800;
 const SPAWN_DISTANCE = 50;
 
 // Eau sur les côtés
@@ -163,6 +163,7 @@ function Game3DLogic({
   resetSignal: number;
 }) {
   // Tous les états du jeu sont internes ici, mais reset quand resetSignal change
+  const [speed, setSpeed] = useState(0);
   const [runnerX, setRunnerX] = useState(0);
   const [runnerZ, setrunnerZ] = useState(0);
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
@@ -182,6 +183,7 @@ function Game3DLogic({
     setGameOver(false);
     setMaxObstacles(5);
     setMinObstacleSpacing(10);
+    setSpeed(1);
   }, [resetSignal]);
 
   // Contrôles clavier
@@ -190,8 +192,14 @@ function Game3DLogic({
       if (!running || gameOver) return;
       if (e.code === "ArrowLeft" && runnerX > -1.5) setRunnerX((x) => x - 1);
       if (e.code === "ArrowRight" && runnerX < 1.5) setRunnerX((x) => x + 1);
-      if (e.code === "ArrowUp" && runnerZ > -6) setrunnerZ((z) => z - 1);
-      if (e.code === "ArrowDown" && runnerZ < 4) setrunnerZ((z) => z + 1);
+      if (e.code === "ArrowUp" && runnerZ > -4) {
+        setrunnerZ((z) => z - 1);
+        setSpeed(speed * 2);
+      }
+      if (e.code === "ArrowDown" && runnerZ < 4) {
+        setrunnerZ((z) => z + 1);
+        setSpeed(speed / 2);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -204,6 +212,8 @@ function Game3DLogic({
     let touchEndY = 0;
 
     function handleTouchStart(e: TouchEvent) {
+      if (e.cancelable) e.preventDefault(); // ← bloque pull-to-refresh
+
       touchStartX = e.changedTouches[0].screenX;
       touchStartY = e.changedTouches[0].screenY;
     }
@@ -212,6 +222,10 @@ function Game3DLogic({
       touchEndX = e.changedTouches[0].screenX;
       touchEndY = e.changedTouches[0].screenY;
       handleSwipeGesture();
+    }
+
+    function handleTouchMove(e: TouchEvent) {
+      if (e.cancelable) e.preventDefault(); // ← bloque scroll vertical
     }
 
     function handleSwipeGesture() {
@@ -226,17 +240,25 @@ function Game3DLogic({
         else if (dx < -30 && runnerX > -1.5) setRunnerX((x) => x - 1); // swipe gauche
       } else {
         // Swipe vertical
-        if (dy > 30 && runnerZ < 4) setrunnerZ((z) => z + 1); // swipe bas
-        else if (dy < -30 && runnerZ > -6) setrunnerZ((z) => z - 1); // swipe haut
+        if (dy > 30 && runnerZ < 4) {
+          setrunnerZ((z) => z + 1);
+          setSpeed(speed / 2);
+        } // swipe bas
+        else if (dy < -30 && runnerZ > -4) {
+          setrunnerZ((z) => z - 1);
+          setSpeed(speed * 2);
+        } // swipe haut
       }
     }
 
     window.addEventListener("touchstart", handleTouchStart);
     window.addEventListener("touchend", handleTouchEnd);
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
 
     return () => {
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("touchmove", handleTouchMove);
     };
   }, [runnerX, runnerZ, running, gameOver]);
   // Logique du jeu
@@ -244,7 +266,7 @@ function Game3DLogic({
     if (!running || gameOver) return;
 
     // Décor : offset augmente (le monde recule, le joueur avance)
-    setCorridorOffset((offset) => offset - 0.18);
+    setCorridorOffset((offset) => offset - 0.18 * speed);
 
     // Obstacles : leur z augmente (ils viennent vers le joueur)
     // setObstacles((obs) =>
@@ -253,8 +275,7 @@ function Game3DLogic({
     setObstacles((obs) =>
       obs
         .map((o) => {
-          const speed = o.type === "bird" ? 0.35 : 0.18;
-          const newZ = o.z + speed;
+          const newZ = o.z + 0.18 * speed * (o.type === "bird" ? 2 : 1);
 
           // Mouvement latéral si c'est un crab
           const newX =
@@ -320,7 +341,7 @@ function Game3DLogic({
             onGameOver(score);
           } else if (o.type === "chest") {
             setScore((s) => {
-              const newScore = s + 10;
+              const newScore = s + 10 * speed;
               onScore(newScore);
               return newScore;
             });
@@ -335,6 +356,7 @@ function Game3DLogic({
     // Pas d'incrémentation automatique du score
 
     if (corridorOffset < -MAX_OFFSET) {
+      setSpeed((prev) => prev + 0.1);
       setMaxObstacles((prev) => Math.min(prev + 1, 100)); // Augmente le max obstacles
       setMinObstacleSpacing((prev) => Math.max(prev - 0.2, 3));
       setCorridorOffset((prev) => prev + MAX_OFFSET); // on ramène à 0
