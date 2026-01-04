@@ -1,12 +1,19 @@
 import { useGLTF } from "@react-three/drei";
 import { useMemo } from "react";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils";
-import Bird from "./../assets/glb/Bird.glb?url";
-import Chest from "./../assets/glb/Chest.glb?url";
-import Crab from "./../assets/glb/Crab.glb?url";
-import Frog from "./../assets/glb/Frog.glb?url";
-import Palm from "./../assets/glb/Palm.glb?url";
-import RocketDino from "./../assets/glb/RocketDino.glb?url";
+// import Bird from "./../assets/glb/Bird.glb?url";
+// import Chest from "./../assets/glb/Chest.glb?url";
+// import Crab from "./../assets/glb/Crab.glb?url";
+// import Frog from "./../assets/glb/Frog.glb?url";
+// import Palm from "./../assets/glb/Palm.glb?url";
+// import RocketDino from "./../assets/glb/RocketDino.glb?url";
+
+import Bird from "/assets/glb/Bird.glb?url";
+import Chest from "/assets/glb/Chest.glb?url";
+import Crab from "/assets/glb/Crab.glb?url";
+import Frog from "/assets/glb/Frog.glb?url";
+import Palm from "/assets/glb/Palm.glb?url";
+import RocketDino from "/assets/glb/RocketDino.glb?url";
 
 export function VoxelBird({
   position,
